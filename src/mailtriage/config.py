@@ -24,12 +24,25 @@ class Settings(BaseSettings):
     webhook_client_state: str
     port: int = Field(default=8088, ge=1, le=65535)
 
-    # LLM provider
-    llm_provider: Literal["anthropic", "openai"] = "anthropic"
+    # LLM provider.
+    #   anthropic         — Claude API
+    #   openai            — OpenAI API
+    #   openai-compatible — any server speaking the OpenAI Chat Completions
+    #                       API (Ollama, LM Studio, llama.cpp server, vLLM,
+    #                       LocalAI, LiteLLM proxy, OpenRouter, Together,
+    #                       Groq, etc.). Requires LLM_BASE_URL.
+    llm_provider: Literal["anthropic", "openai", "openai-compatible"] = "anthropic"
     llm_model: str = "claude-haiku-4-5-20251001"
     llm_timeout_seconds: int = Field(default=60, ge=1, le=600)
     anthropic_api_key: SecretStr = SecretStr("")
     openai_api_key: SecretStr = SecretStr("")
+    # Base URL for openai-compatible servers (e.g. http://host.docker.internal:11434/v1
+    # for Ollama, http://localhost:1234/v1 for LM Studio).
+    llm_base_url: str = ""
+    # Some local servers don't honor response_format={"type":"json_object"}.
+    # The classifier's parser already tolerates JSON-in-text output, so this
+    # can be safely disabled for those servers.
+    llm_response_format_json: bool = True
 
     # Scaling
     concurrency: int = Field(default=1, ge=1, le=64)
@@ -52,7 +65,7 @@ class Settings(BaseSettings):
     # ----- validators -----
 
     @field_validator("tenant_id", "client_id", "webhook_url",
-                     "webhook_client_state", "llm_model",
+                     "webhook_client_state", "llm_model", "llm_base_url",
                      mode="before")
     @classmethod
     def _strip_str(cls, v):
@@ -76,7 +89,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _check_provider_key(self):
         """Fail at startup, not at first webhook, if the chosen provider
-        has no API key."""
+        is misconfigured."""
         if self.llm_provider == "anthropic":
             key = self.anthropic_api_key.get_secret_value().strip()
             if not key:
@@ -89,6 +102,15 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "OPENAI_API_KEY is required when LLM_PROVIDER=openai"
                 )
+        elif self.llm_provider == "openai-compatible":
+            if not self.llm_base_url:
+                raise ValueError(
+                    "LLM_BASE_URL is required when LLM_PROVIDER=openai-compatible "
+                    "(e.g. http://host.docker.internal:11434/v1 for Ollama)"
+                )
+            # API key is optional — many local servers ignore it. Hosted
+            # gateways (OpenRouter, Together, Groq, LiteLLM proxy) do
+            # require one; pass it via OPENAI_API_KEY.
         return self
 
     @property

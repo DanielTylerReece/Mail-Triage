@@ -4,7 +4,7 @@
 
 <h1 align="center">Mail-Triage</h1>
 
-Headless inbox triage for Microsoft 365 mailboxes. Classifies every new message with a deterministic rules file (Tier 1) and an LLM (Tier 2 — Anthropic or OpenAI), then moves it into the matching folder. Built for self-hosting and configured entirely through plain-text files.
+Headless inbox triage for Microsoft 365 mailboxes. Classifies every new message with a deterministic rules file (Tier 1) and an LLM (Tier 2 — Anthropic, OpenAI, or any OpenAI-compatible server, including local models like Ollama), then moves it into the matching folder. Built for self-hosting and configured entirely through plain-text files.
 
 > Mail never moves between mailboxes. Mail-Triage is a folder sorter, not a router.
 >
@@ -22,7 +22,7 @@ Mail-Triage bolts a thin classification layer onto your existing mailbox: every 
 - **Multi-mailbox.** One service handles many mailboxes (your personal, a partner's, a shared mailbox, etc.) within a single Microsoft 365 tenant.
 - **Plain-text configuration.** Mailboxes, rules, and categories live in `config/*.txt` files you edit by hand. No DB schema, no admin UI.
 - **Categories are configurable.** Add a new category (e.g. `promotions` → `/Promotions`) by adding a line to `config/categories.txt` and restarting. No code changes.
-- **Pluggable LLM provider.** Anthropic Claude or OpenAI GPT — pick one. Both use prompt caching for low cost.
+- **Pluggable LLM provider.** Anthropic Claude, OpenAI GPT, or any OpenAI-compatible server (Ollama, LM Studio, llama.cpp, vLLM, LocalAI, OpenRouter, Groq, …). Hosted models use prompt caching for low cost; local models are free.
 - **Pluggable backends.** Storage (`sqlite` today; protocol-ready for `postgres`) and queue (`memory` today; protocol-ready for `redis`) sit behind interfaces, so you can scale up without rewriting.
 - **Configurable parallelism.** `CONCURRENCY=N` runs N parallel Tier-2 workers reading from the same fair queue.
 - **Hard cross-mailbox guarantee.** A safety check in the dispatcher refuses to move a message into a folder belonging to a different mailbox. Tested adversarially. Runs even in dry-run mode.
@@ -188,12 +188,38 @@ AUDIT_RETENTION_DAYS=90
 
 ## LLM provider selection
 
-| Provider | Recommended model | Pricing notes |
-|---|---|---|
-| **Anthropic** | `claude-haiku-4-5-20251001` | System prompt explicitly cached (~90% off cached input). |
-| **OpenAI** | `gpt-4o-mini` | System prompt auto-cached above 1024 tokens (~50% off). |
+| `LLM_PROVIDER` | Use for | Recommended model | Pricing notes |
+|---|---|---|---|
+| `anthropic` | Claude API | `claude-haiku-4-5-20251001` | System prompt explicitly cached (~90% off cached input). |
+| `openai` | OpenAI API | `gpt-4o-mini` | System prompt auto-cached above 1024 tokens (~50% off). |
+| `openai-compatible` | Any OpenAI-compatible server: Ollama, LM Studio, llama.cpp, vLLM, LocalAI, LiteLLM proxy, OpenRouter, Together, Groq, … | depends on server (e.g. `llama3.1:8b` for Ollama) | Local models = $0/request. Hosted gateways bill normally. |
 
-Switch by editing `LLM_PROVIDER` and `LLM_MODEL` in `.env` and restarting. No code change.
+Switch by editing `LLM_PROVIDER` and `LLM_MODEL` in `.env` and restarting (`docker compose up -d`, not `restart`). No code change.
+
+### Using a local model (or any OpenAI-compatible server)
+
+Set `LLM_PROVIDER=openai-compatible` and point `LLM_BASE_URL` at your server's `/v1` endpoint:
+
+```env
+LLM_PROVIDER=openai-compatible
+LLM_MODEL=llama3.1:8b
+LLM_BASE_URL=http://host.docker.internal:11434/v1   # Ollama on the Docker host
+OPENAI_API_KEY=                                     # leave empty for local servers
+LLM_RESPONSE_FORMAT_JSON=false                      # toggle off if your server doesn't support JSON mode
+```
+
+Common base URLs:
+
+| Server | `LLM_BASE_URL` (from inside the container) |
+|---|---|
+| Ollama (Linux host) | `http://host.docker.internal:11434/v1` |
+| LM Studio | `http://host.docker.internal:1234/v1` |
+| llama.cpp `./server` | `http://host.docker.internal:8080/v1` |
+| vLLM | `http://your-vllm-host:8000/v1` |
+| OpenRouter | `https://openrouter.ai/api/v1` (set `OPENAI_API_KEY`) |
+| Groq | `https://api.groq.com/openai/v1` (set `OPENAI_API_KEY`) |
+
+The classifier's parser tolerates JSON-in-text output, so smaller local models that don't honor `response_format={"type":"json_object"}` still work — just set `LLM_RESPONSE_FORMAT_JSON=false`.
 
 ## First-time setup (DRY-RUN)
 

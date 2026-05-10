@@ -67,27 +67,48 @@ class AnthropicProvider:
         return "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
 
 
-# -------------------- OpenAI --------------------
+# -------------------- OpenAI / OpenAI-compatible --------------------
 
 
 class OpenAIProvider:
-    name = "openai"
+    """OpenAI Chat Completions client.
 
-    def __init__(self, api_key: str, model: str, timeout: int) -> None:
+    With `base_url` set, this also speaks to any OpenAI-compatible server
+    (Ollama, LM Studio, llama.cpp server, vLLM, LocalAI, LiteLLM proxy,
+    OpenRouter, Together, Groq, etc.).
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        timeout: int,
+        *,
+        base_url: str | None = None,
+        use_json_format: bool = True,
+        provider_name: str = "openai",
+    ) -> None:
         from openai import OpenAI
+        self.name = provider_name
         self.model = model
-        self._client = OpenAI(api_key=api_key, timeout=timeout)
+        self._use_json_format = use_json_format
+        kwargs: dict[str, Any] = {"api_key": api_key or "not-needed", "timeout": timeout}
+        if base_url:
+            kwargs["base_url"] = base_url
+        self._client = OpenAI(**kwargs)
 
     def complete(self, system_prompt: str, user_payload: str) -> str:
-        resp = self._client.chat.completions.create(
-            model=self.model,
-            messages=[
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_payload},
             ],
-            max_tokens=256,
-            response_format={"type": "json_object"},
-        )
+            "max_tokens": 256,
+        }
+        if self._use_json_format:
+            kwargs["response_format"] = {"type": "json_object"}
+        resp = self._client.chat.completions.create(**kwargs)
         return resp.choices[0].message.content or ""
 
 
@@ -118,10 +139,31 @@ def get_provider() -> Provider:
         key = _secret(s.openai_api_key)
         if not key:
             raise RuntimeError("OPENAI_API_KEY not set but LLM_PROVIDER=openai")
-        _provider = OpenAIProvider(key, s.llm_model, s.llm_timeout_seconds)
+        _provider = OpenAIProvider(
+            key, s.llm_model, s.llm_timeout_seconds,
+            use_json_format=s.llm_response_format_json,
+            provider_name="openai",
+        )
+    elif s.llm_provider == "openai-compatible":
+        if not s.llm_base_url:
+            raise RuntimeError("LLM_BASE_URL not set but LLM_PROVIDER=openai-compatible")
+        # API key is optional for self-hosted servers; use whatever was
+        # provided or fall through to a placeholder inside the provider.
+        key = _secret(s.openai_api_key)
+        _provider = OpenAIProvider(
+            key, s.llm_model, s.llm_timeout_seconds,
+            base_url=s.llm_base_url,
+            use_json_format=s.llm_response_format_json,
+            provider_name="openai-compatible",
+        )
     else:
         raise RuntimeError(f"unknown LLM_PROVIDER: {s.llm_provider}")
-    log.info("Tier 2 classifier: provider=%s model=%s", _provider.name, _provider.model)
+    log.info(
+        "Tier 2 classifier: provider=%s model=%s base_url=%s json_mode=%s",
+        _provider.name, _provider.model,
+        s.llm_base_url or "(default)",
+        s.llm_response_format_json,
+    )
     return _provider
 
 
