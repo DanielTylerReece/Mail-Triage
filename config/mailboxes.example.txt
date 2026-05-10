@@ -1,0 +1,19 @@
+# mailtriage — mailboxes to monitor.
+#
+# One email address per line. Aliases of the same underlying mailbox are
+# deduplicated automatically (the system resolves each address to its
+# primary UPN via Microsoft Graph and only creates one subscription per
+# unique mailbox).
+#
+# Lines starting with # are comments. Blank lines ignored.
+
+# --- Primary mailboxes ---
+alice@example.com
+bob@example.com
+
+# --- Shared mailboxes ---
+team@example.com
+
+# --- Aliases (optional, redundant with primary but documents intent) ---
+# alice@old-domain.example.com
+# bob@old-domain.example.com

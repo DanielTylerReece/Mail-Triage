@@ -1,0 +1,39 @@
+services:
+  mailtriage:
+    build: .
+    container_name: mailtriage
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Pin the in-container timezone so APScheduler cron triggers behave
+      # predictably (the slim base image has no /etc/localtime).
+      TZ: UTC
+    ports:
+      - "127.0.0.1:8088:8088"
+    volumes:
+      - ./config:/app/config:ro
+      - mailtriage-data:/var/lib/mailtriage
+    # Defense in depth: drop all caps, no privilege escalation, read-only
+    # rootfs. The container only needs to write to the named data volume.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys\ntry: sys.exit(0 if urllib.request.urlopen('http://localhost:8088/healthz', timeout=5).status==200 else 1)\nexcept Exception: sys.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    logging:
+      # Cap log size so a crash loop or webhook storm doesn't fill disk.
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+volumes:
+  mailtriage-data:

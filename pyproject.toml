@@ -1,0 +1,52 @@
+[project]
+name = "mailtriage"
+version = "0.4.0"
+description = "Headless inbox triage for Microsoft 365, with Anthropic or OpenAI as the classifier"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "Mail-Triage contributors"}]
+# Upper bounds cap the next breaking major release. Lower bounds reflect the
+# minimum versions exercised in CI / local testing. Bump the upper bound
+# explicitly after smoke-testing the new major.
+dependencies = [
+    "fastapi>=0.110,<1",
+    "uvicorn[standard]>=0.27,<1",
+    "msal>=1.27,<2",
+    "httpx>=0.27,<1",
+    "pydantic>=2.6,<3",
+    "pydantic-settings>=2.2,<3",
+    "apscheduler>=3.10,<4",
+    "python-dateutil>=2.9,<3",
+    "beautifulsoup4>=4.12,<5",
+    "lxml>=5.1,<7",
+    "anthropic>=0.40,<2",
+    "openai>=1.50,<2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9",
+    "pytest-asyncio>=0.23,<1",
+    "ruff>=0.3,<1",
+    "mypy>=1.9,<2",
+]
+
+[project.scripts]
+mailtriage = "mailtriage.__main__:main"
+mailtriage-status = "mailtriage.status:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

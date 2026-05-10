@@ -1,0 +1,64 @@
+# mailtriage — Tier 1 rules.
+#
+# One rule per line. First match wins. Walk top to bottom.
+#
+# Format:
+#   [mailbox:<address>] <type> <pattern> -> <category>
+#
+# The mailbox: prefix is optional. Without it, the rule applies to all mailboxes.
+# With it, the rule only applies when the message arrived at that mailbox.
+#
+# Match types:
+#   from <full-email>             — exact sender address
+#   from-domain <domain>          — sender's domain (case-insensitive)
+#   subject-contains <substring>  — substring in subject (case-insensitive)
+#   subject-regex <python-regex>  — regex against subject
+#   header-exists <header-name>   — message has this header
+#   to <full-email>               — exact recipient (useful for aliased mailboxes)
+#   self-loop                     — message is from this mailbox to itself
+#
+# Categories:
+#   keep              — leave in Inbox
+#   newsletter        — /Newsletters
+#   notification      — /Notifications
+#   receipt           — /Receipts
+#   action-item       — /Action Items
+#   triage            — /Triage
+#   spam              — Junk Email
+#
+# Any category present in config/categories.txt is allowed. Adding a
+# new category there makes it available for rules immediately.
+
+# === Self-loop prevention (so daily summaries don't get re-classified) ===
+self-loop -> notification
+
+# === Newsletters: anything with List-Unsubscribe is almost certainly bulk ===
+header-exists List-Unsubscribe -> newsletter
+
+# === Notifications: machine-generated stuff ===
+from-domain noreply.github.com -> notification
+from-domain accounts.google.com -> notification
+from noreply@accounts.google.com -> notification
+from-domain microsoft.com -> notification
+from-domain microsoftonline.com -> notification
+from-domain amazonaws.com -> notification
+
+# === Receipts ===
+from-domain amazon.com -> receipt
+from-domain stripe.com -> receipt
+from-domain paypal.com -> receipt
+subject-regex ^Order #\d+ -> receipt
+subject-contains your receipt -> receipt
+subject-contains payment received -> receipt
+
+# === Mailbox-specific examples ===
+
+# Per-user trusted senders go straight to Inbox
+mailbox:alice@example.com from-domain trusted-vendor.example.com -> keep
+mailbox:alice@example.com from-domain critical-saas.example.com -> keep
+
+# Shared mailbox: utility bills are action items
+mailbox:team@example.com from-domain utility-provider.example.com -> action-item
+mailbox:team@example.com subject-contains your bill is ready -> action-item
+
+# === Add your own rules below ===

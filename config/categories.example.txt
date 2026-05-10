@@ -1,0 +1,30 @@
+# Mail-Triage categories.
+#
+# Each category maps a classification label (returned by Tier 1 rules or by
+# the Tier 2 LLM) to the destination folder it should be moved into. The
+# description tells the LLM what kind of mail belongs in each category.
+#
+# Format:
+#   <category-name>  <folder-name>  | <description>
+#
+# - <category-name> is what rules.txt and the LLM emit. Lowercase,
+#   alphanumeric + hyphen + underscore. Must be unique per file.
+# - <folder-name> is the M365 folder display name in the mailbox.
+#   The literal value `Inbox` means "leave the message in Inbox" (no move).
+# - <description> is shown to the LLM in the system prompt.
+#
+# To add a new category:
+#   1. Add a line below.
+#   2. Create the matching folder in EACH monitored mailbox (Outlook web).
+#   3. Restart the container: `docker compose restart mailtriage`.
+#
+# A `triage` category is REQUIRED — it is the fallback when classification
+# fails or returns an unknown value. Do not remove it.
+
+keep         Inbox          | Personal correspondence and direct work mail; needs to be in Inbox today
+newsletter   Newsletters    | Bulk marketing or subscription content; digests; curated content
+notification Notifications  | Machine-generated alerts that don't need action: build status, login confirmations, monitoring noise
+receipt      Receipts       | Order confirmations, invoices, payment confirmations, shipping notices
+action-item  Action Items   | Mail that requires me to do something specific or respond. Bills, vendor questions, meeting RSVPs.
+triage       Triage         | Uncertain. Could plausibly be keep or action-item. Sender unfamiliar but message looks legitimate.
+spam         Junk Email     | Phishing, unsolicited sales pitches, obvious scams.
